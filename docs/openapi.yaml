@@ -1,0 +1,183 @@
+openapi: 3.0.3
+
+info:
+  title: CampusHub Reservation API
+  version: 1.0.0
+  description: API specification for managing campus resources and time-slotted reservations.
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local Development Server
+
+security: []
+
+components:
+  schemas:
+    Resource:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - location
+        - isAvailable
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+            - ROOM
+            - EQUIPMENT
+            - LAB
+        location:
+          type: string
+        isAvailable:
+          type: boolean
+
+    Reservation:
+      type: object
+      required:
+        - id
+        - resourceId
+        - userId
+        - startTime
+        - endTime
+        - status
+      properties:
+        id:
+          type: string
+        resourceId:
+          type: string
+        userId:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - PENDING
+            - CONFIRMED
+            - CANCELLED
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+paths:
+  /resources:
+    get:
+      operationId: listResources
+      summary: List campus resources
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - ROOM
+              - EQUIPMENT
+              - LAB
+      responses:
+        '200':
+          description: List of resources
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Resource'
+
+        '400':
+          description: Invalid resource type filter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reservations:
+    post:
+      operationId: createReservation
+      summary: Create a reservation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reservation'
+
+      responses:
+        '201':
+          description: Reservation created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+
+        '400':
+          description: Invalid reservation request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '409':
+          description: Resource already reserved for requested time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reservations/user/{userId}:
+    get:
+      operationId: getUserReservations
+      summary: Get active reservations for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Active reservations for the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+
+        '400':
+          description: Invalid user ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
