@@ -8,10 +8,31 @@
 import express from "express";
 import type { Request, Response, NextFunction, Express } from "express";
 
+import { connectDatabase } from "./config/database.js";
+import { getMongoUri } from "./config/env.js";
 import { apiRouter } from "./routes/index.js";
+import type { ErrorResponse } from "./types/reservation.js";
 
 const API_PREFIX = "/api/v1" as const;
 const DEFAULT_PORT = 3000 as const;
+
+/**
+ * True for client errors raised by express.json() (e.g. malformed JSON),
+ * which carry a 4xx `status` and a string `type` such as
+ * "entity.parse.failed".
+ */
+function isBodyParserClientError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) {
+    return false;
+  }
+  const { status, type } = err as { status?: unknown; type?: unknown };
+  return (
+    typeof type === "string" &&
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500
+  );
+}
 
 export function createApp(): Express {
   const app: Express = express();
@@ -25,13 +46,27 @@ export function createApp(): Express {
     res.status(404).json({ error: "Not Found" });
   });
 
-  // Centralized error handler. Express v5 forwards rejected async handlers
-  // here automatically, but handlers in this codebase also forward via next().
+  // Centralized error handler — a backstop for errors raised outside
+  // controllers (controllers format their own 4xx/500 responses).
+  // Responds with the OpenAPI ErrorResponse shape; internal details are logged
+  // server-side, never sent to the client. Unparseable request bodies are
+  // invalid requests (400), not server errors.
   app.use(
     (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
-      const message =
-        err instanceof Error ? err.message : "Internal Server Error";
-      res.status(500).json({ error: message });
+      if (isBodyParserClientError(err)) {
+        const body: ErrorResponse = {
+          code: "INVALID_BODY",
+          message: "Request body must be valid JSON",
+        };
+        res.status(400).json(body);
+        return;
+      }
+      console.error(err);
+      const body: ErrorResponse = {
+        code: "INTERNAL_ERROR",
+        message: "Internal Server Error",
+      };
+      res.status(500).json(body);
     },
   );
 
@@ -47,9 +82,19 @@ function resolvePort(): number {
   return Number.isNaN(parsed) ? DEFAULT_PORT : parsed;
 }
 
-const app = createApp();
-const port = resolvePort();
+/** Connect to MongoDB, then start serving HTTP requests. */
+async function start(): Promise<void> {
+  await connectDatabase(getMongoUri());
 
-app.listen(port, (): void => {
-  console.log(`CampusHub backend listening on port ${port}`);
+  const app = createApp();
+  const port = resolvePort();
+
+  app.listen(port, (): void => {
+    console.log(`CampusHub backend listening on port ${port}`);
+  });
+}
+
+start().catch((err: unknown): void => {
+  console.error("Failed to start CampusHub backend:", err);
+  process.exit(1);
 });

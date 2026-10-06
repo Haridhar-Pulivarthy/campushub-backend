@@ -5,17 +5,17 @@
  * (docs/openapi.yaml). No request parsing, no business logic, no DB access.
  *
  * Endpoints:
- *   GET  /resources                 -> listResources
- *   POST /reservations              -> createReservation
- *   GET  /reservations/user/:userId -> getUserReservations
+ *   GET  /resources                 -> resource.controller listResources
+ *   POST /reservations              -> reservation.controller createReservation
+ *   GET  /reservations/user/:userId -> reservation.controller getUserReservations
  */
 import { Router } from "express";
 
 import {
   createReservation,
   getUserReservations,
-  listResources,
 } from "../controllers/reservation.controller.js";
+import { listResources } from "../controllers/resource.controller.js";
 
 const reservationRouter: Router = Router();
 

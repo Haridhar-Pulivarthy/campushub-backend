@@ -33,7 +33,7 @@ Dependency direction is one-way: Routes → Controllers → Services → Models.
 
 - **Explicit interfaces required.** Every function signature has explicit parameter and return types via TypeScript interfaces/types. Every DB schema has a corresponding explicit `interface` for its document shape.
 - **`any` is disallowed.** Never use the `any` type (explicit or implied). Prefer precise types; use `unknown` with narrowing when a type is genuinely not known. Do not silence type errors with `any`, `as any`, or `// @ts-ignore`.
-- **Async error handling — no unhandled promises.** Every `await`/promise path must handle rejection. Async controllers/handlers must forward errors to Express error-handling middleware (e.g. `try/catch` + `next(err)`, or an async wrapper util), never leaving a promise to reject unhandled. No fire-and-forget promises without explicit handling.
+- **Async error handling — no unhandled promises.** Every `await`/promise path must handle rejection. Async controllers must wrap service calls in `try/catch`, map known domain errors to their 4xx responses, and respond to any unexpected error themselves with the OpenAPI `500` `ErrorResponse` (`{ code, message }`, no internal details leaked) — per the Lab 3 rubric, controllers own all HTTP response formatting, including 500s. Never leave a promise to reject unhandled. The centralized error middleware in `app.ts` remains as a backstop for errors raised outside controllers (e.g. body parsing). No fire-and-forget promises without explicit handling.
 - These reinforce the strict compiler settings already in `tsconfig.json` (below); do not relax those settings to make code compile.
 
 ## 4. Git & commit formatting
@@ -49,7 +49,7 @@ Before writing or accepting code, verify:
 - [ ] New source files are `.ts`, and no unauthorized dependency was added.
 - [ ] Code sits in the correct layer; no layer does another's job (esp. **no DB access in controllers**).
 - [ ] All function signatures and schemas have explicit types/interfaces; **no `any`** and no `@ts-ignore`.
-- [ ] Every async path handles errors and forwards them to Express error middleware.
+- [ ] Every async path handles errors; controllers catch unexpected errors and respond with the 500 `ErrorResponse`.
 
 If a requested change cannot satisfy all four categories, do not implement it silently — flag the conflict and propose a compliant approach.
 

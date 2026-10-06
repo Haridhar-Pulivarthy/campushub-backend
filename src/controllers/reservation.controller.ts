@@ -1,12 +1,12 @@
 /**
  * Reservation controller — HTTP request/response handling only.
  *
- * Reads inputs from the request, delegates to the reservation service, and
- * shapes the HTTP response (status code + body). No DB access and no business
- * logic here. Domain errors from the service are mapped to HTTP status codes;
- * unexpected errors are forwarded to Express error middleware via next().
+ * Reads inputs from the request, awaits the reservation service, and shapes
+ * every HTTP response (status code + body). No DB access and no business
+ * logic here. Domain errors from the service are mapped to 400/409; any
+ * unexpected error is logged and answered with a 500 ErrorResponse.
  */
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 
 import {
   ConflictError,
@@ -14,8 +14,6 @@ import {
   coerceStatus,
   createReservation as createReservationService,
   getUserReservations as getUserReservationsService,
-  isResourceType,
-  listResources as listResourcesService,
 } from "../services/reservation.service.js";
 import type { ErrorResponse } from "../types/reservation.js";
 
@@ -23,41 +21,17 @@ function errorBody(code: string, message: string): ErrorResponse {
   return { code, message };
 }
 
-/** GET /resources — optional `type` query filter. */
-export function listResources(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
-  try {
-    const rawType = req.query["type"];
-    if (rawType === undefined) {
-      res.status(200).json(listResourcesService());
-      return;
-    }
-    if (typeof rawType !== "string" || !isResourceType(rawType)) {
-      res
-        .status(400)
-        .json(
-          errorBody(
-            "INVALID_TYPE",
-            "type must be one of ROOM, EQUIPMENT, LAB",
-          ),
-        );
-      return;
-    }
-    res.status(200).json(listResourcesService(rawType));
-  } catch (err) {
-    next(err);
-  }
+/** Log an unexpected error server-side and respond with a generic 500. */
+function sendInternalError(res: Response, err: unknown): void {
+  console.error(err);
+  res.status(500).json(errorBody("INTERNAL_ERROR", "Internal Server Error"));
 }
 
 /** POST /reservations — create a reservation. */
-export function createReservation(
+export async function createReservation(
   req: Request,
   res: Response,
-  next: NextFunction,
-): void {
+): Promise<void> {
   try {
     const body: unknown = req.body;
     if (typeof body !== "object" || body === null) {
@@ -87,7 +61,7 @@ export function createReservation(
     }
 
     const status = coerceStatus(record["status"]);
-    const created = createReservationService({
+    const created = await createReservationService({
       resourceId,
       userId,
       startTime,
@@ -104,30 +78,27 @@ export function createReservation(
       res.status(409).json(errorBody("RESERVATION_CONFLICT", err.message));
       return;
     }
-    next(err);
+    sendInternalError(res, err);
   }
 }
 
 /** GET /reservations/user/:userId — active reservations for a user. */
-export function getUserReservations(
+export async function getUserReservations(
   req: Request,
   res: Response,
-  next: NextFunction,
-): void {
+): Promise<void> {
   try {
     const userId = req.params["userId"];
     if (typeof userId !== "string" || userId.trim() === "") {
-      res
-        .status(400)
-        .json(errorBody("INVALID_USER_ID", "userId is required"));
+      res.status(400).json(errorBody("INVALID_USER_ID", "userId is required"));
       return;
     }
-    res.status(200).json(getUserReservationsService(userId));
+    res.status(200).json(await getUserReservationsService(userId));
   } catch (err) {
     if (err instanceof ValidationError) {
       res.status(400).json(errorBody("INVALID_USER_ID", err.message));
       return;
     }
-    next(err);
+    sendInternalError(res, err);
   }
 }
