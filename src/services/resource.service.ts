@@ -17,11 +17,25 @@ import type { Resource, ResourceType } from "../types/reservation.js";
 type LeanResource = IResource & { _id: Types.ObjectId };
 
 /** Filter accepted by listResources queries. */
-type ResourceFilter = Partial<Pick<IResource, "type">>;
+export type ResourceFilter = Partial<Pick<IResource, "type" | "isAvailable">>;
 
 /** Type guard for the ResourceType enum. */
 export function isResourceType(value: string): value is ResourceType {
   return (RESOURCE_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * Parse an isAvailable filter value.
+ * @returns true/false for "true"/"false"; undefined for any other value.
+ */
+export function parseAvailability(value: string): boolean | undefined {
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return undefined;
 }
 
 /** Map a stored Resource document to the API `Resource` shape. */
@@ -36,11 +50,12 @@ function toResource(doc: LeanResource): Resource {
 }
 
 /**
- * Return all resources, optionally filtered by type.
- * @param type - Optional resource-type filter.
+ * Return all resources, optionally filtered by type and/or availability.
+ * @param filter - Optional filters; an empty filter returns every resource.
  */
-export async function listResources(type?: ResourceType): Promise<Resource[]> {
-  const filter: ResourceFilter = type === undefined ? {} : { type };
+export async function listResources(
+  filter: ResourceFilter = {},
+): Promise<Resource[]> {
   const docs = await ResourceModel.find(filter).lean<LeanResource[]>().exec();
   return docs.map(toResource);
 }

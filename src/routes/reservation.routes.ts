@@ -8,10 +8,12 @@
  *   GET  /resources                 -> resource.controller listResources
  *   POST /reservations              -> reservation.controller createReservation
  *   GET  /reservations/user/:userId -> reservation.controller getUserReservations
+ *   PATCH /reservations/:id/cancel  -> reservation.controller cancelReservation
  */
 import { Router } from "express";
 
 import {
+  cancelReservation,
   createReservation,
   getUserReservations,
 } from "../controllers/reservation.controller.js";
@@ -22,5 +24,6 @@ const reservationRouter: Router = Router();
 reservationRouter.get("/resources", listResources);
 reservationRouter.post("/reservations", createReservation);
 reservationRouter.get("/reservations/user/:userId", getUserReservations);
+reservationRouter.patch("/reservations/:id/cancel", cancelReservation);
 
 export { reservationRouter };

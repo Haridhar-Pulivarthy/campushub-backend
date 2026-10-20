@@ -92,6 +92,11 @@ paths:
               - ROOM
               - EQUIPMENT
               - LAB
+        - name: isAvailable
+          in: query
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: List of resources
@@ -103,7 +108,7 @@ paths:
                   $ref: '#/components/schemas/Resource'
 
         '400':
-          description: Invalid resource type filter
+          description: Invalid resource type or isAvailable filter
           content:
             application/json:
               schema:
@@ -136,6 +141,46 @@ paths:
 
         '409':
           description: Resource already reserved for requested time
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /reservations/{id}/cancel:
+    patch:
+      operationId: cancelReservation
+      summary: Cancel a reservation
+      description: Idempotent; cancelling an already-cancelled reservation returns its current state.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Reservation cancelled (or already cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+
+        '400':
+          description: Invalid reservation ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+        '404':
+          description: Reservation not found
           content:
             application/json:
               schema:

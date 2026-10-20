@@ -13,7 +13,7 @@ import {
   ReservationModel,
   type IReservation,
 } from "../models/Reservation.model.js";
-import { ResourceModel } from "../models/Resource.model.js";
+import { ResourceModel, type IResource } from "../models/Resource.model.js";
 import type { Reservation, ReservationStatus } from "../types/reservation.js";
 
 /** Thrown when input fails a domain validation rule. */
@@ -32,6 +32,14 @@ export class ConflictError extends Error {
   }
 }
 
+/** Thrown when a referenced reservation does not exist. */
+export class NotFoundError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
 /** Fields a client may supply when creating a reservation. */
 export interface CreateReservationInput {
   resourceId: string;
@@ -45,6 +53,9 @@ export interface CreateReservationInput {
 type LeanReservation = IReservation & { _id: Types.ObjectId };
 
 const OBJECT_ID_PATTERN = /^[0-9a-fA-F]{24}$/;
+
+/** Statuses of existing reservations that block an overlapping booking. */
+const BLOCKING_STATUSES: readonly ReservationStatus[] = ["PENDING", "CONFIRMED"];
 
 /** Type guard for the ReservationStatus enum. */
 function isReservationStatus(value: string): value is ReservationStatus {
@@ -86,7 +97,7 @@ function toReservation(doc: LeanReservation): Reservation {
 /**
  * Validate and persist a new reservation.
  * @throws ValidationError when fields are missing/malformed or the resource
- *   does not exist.
+ *   does not exist or is unavailable.
  * @throws ConflictError when the resource is already reserved for the range.
  */
 export async function createReservation(
@@ -112,15 +123,21 @@ export async function createReservation(
 
   const resourceObjectId = new Types.ObjectId(resourceId);
 
-  const resource = await ResourceModel.exists({ _id: resourceObjectId }).exec();
+  const resource = await ResourceModel.findById(resourceObjectId)
+    .select("isAvailable")
+    .lean<Pick<IResource, "isAvailable">>()
+    .exec();
   if (resource === null) {
     throw new ValidationError(`Unknown resourceId: ${resourceId}`);
+  }
+  if (!resource.isAvailable) {
+    throw new ValidationError(`Resource ${resourceId} is not available`);
   }
 
   // Two intervals overlap when each starts before the other ends.
   const conflict = await ReservationModel.exists({
     resourceId: resourceObjectId,
-    status: { $ne: "CANCELLED" },
+    status: { $in: BLOCKING_STATUSES },
     startTime: { $lt: end },
     endTime: { $gt: start },
   }).exec();
@@ -138,6 +155,41 @@ export async function createReservation(
     status: status ?? "PENDING",
   });
   return toReservation(created.toObject<LeanReservation>());
+}
+
+/**
+ * Cancel a reservation. Idempotent: an already-cancelled reservation is
+ * returned unchanged.
+ * @throws ValidationError when id is not a valid ObjectId.
+ * @throws NotFoundError when no reservation has the given id.
+ */
+export async function cancelReservation(id: string): Promise<Reservation> {
+  if (typeof id !== "string" || !OBJECT_ID_PATTERN.test(id)) {
+    throw new ValidationError("id must be a valid ObjectId");
+  }
+  const reservationId = new Types.ObjectId(id);
+
+  // Atomic transition: only a PENDING/CONFIRMED reservation is updated, and
+  // only its status field is written.
+  const cancelled = await ReservationModel.findOneAndUpdate(
+    { _id: reservationId, status: { $in: BLOCKING_STATUSES } },
+    { $set: { status: "CANCELLED" } },
+    { returnDocument: "after" },
+  )
+    .lean<LeanReservation>()
+    .exec();
+  if (cancelled !== null) {
+    return toReservation(cancelled);
+  }
+
+  // Nothing transitioned: either already cancelled or nonexistent.
+  const existing = await ReservationModel.findById(reservationId)
+    .lean<LeanReservation>()
+    .exec();
+  if (existing === null) {
+    throw new NotFoundError(`Reservation ${id} not found`);
+  }
+  return toReservation(existing);
 }
 
 /**

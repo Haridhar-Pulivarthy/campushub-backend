@@ -3,14 +3,16 @@
  *
  * Reads inputs from the request, awaits the reservation service, and shapes
  * every HTTP response (status code + body). No DB access and no business
- * logic here. Domain errors from the service are mapped to 400/409; any
+ * logic here. Domain errors from the service are mapped to 400/404/409; any
  * unexpected error is logged and answered with a 500 ErrorResponse.
  */
 import type { Request, Response } from "express";
 
 import {
   ConflictError,
+  NotFoundError,
   ValidationError,
+  cancelReservation as cancelReservationService,
   coerceStatus,
   createReservation as createReservationService,
   getUserReservations as getUserReservationsService,
@@ -76,6 +78,33 @@ export async function createReservation(
     }
     if (err instanceof ConflictError) {
       res.status(409).json(errorBody("RESERVATION_CONFLICT", err.message));
+      return;
+    }
+    sendInternalError(res, err);
+  }
+}
+
+/** PATCH /reservations/:id/cancel — cancel a reservation (idempotent). */
+export async function cancelReservation(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  try {
+    const id = req.params["id"];
+    if (typeof id !== "string" || id.trim() === "") {
+      res
+        .status(400)
+        .json(errorBody("INVALID_RESERVATION_ID", "id is required"));
+      return;
+    }
+    res.status(200).json(await cancelReservationService(id));
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      res.status(400).json(errorBody("INVALID_RESERVATION_ID", err.message));
+      return;
+    }
+    if (err instanceof NotFoundError) {
+      res.status(404).json(errorBody("RESERVATION_NOT_FOUND", err.message));
       return;
     }
     sendInternalError(res, err);
