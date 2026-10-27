@@ -1,0 +1,56 @@
+/*
+ * Global base styles and design tokens only. Component styles live in
+ * co-located CSS Modules (*.module.css).
+ */
+:root {
+  --color-text: #1f2328;
+  --color-text-muted: #59636e;
+  --color-bg: #ffffff;
+  --color-surface: #f6f8fa;
+  --color-border: #d1d9e0;
+  --color-accent: #0969da;
+  --color-accent-subtle: #ddf4ff;
+  --color-danger: #cf222e;
+  --color-danger-subtle: #ffebe9;
+  --color-success: #1a7f37;
+  --color-success-subtle: #dafbe1;
+  --color-warning: #9a6700;
+  --color-warning-subtle: #fff8c5;
+  --radius: 8px;
+
+  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  color-scheme: light dark;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text: #e6edf3;
+    --color-text-muted: #9198a1;
+    --color-bg: #0d1117;
+    --color-surface: #151b23;
+    --color-border: #3d444d;
+    --color-accent: #4493f8;
+    --color-accent-subtle: #121d2f;
+    --color-danger: #f85149;
+    --color-danger-subtle: #25171c;
+    --color-success: #3fb950;
+    --color-success-subtle: #12261e;
+    --color-warning: #d29922;
+    --color-warning-subtle: #272115;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
