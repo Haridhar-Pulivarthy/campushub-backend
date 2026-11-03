@@ -1,99 +1,71 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+CampusHub (CS 5500): Express 5 + Mongoose 9 backend in `src/`, React 19 + Vite client in `client/`, shared API types in `shared/`. API contract: `docs/openapi.yaml`. Setup, run, and manual checks: `README.md`. No automated tests yet. Current lab: Lab 6 (refactoring and context optimization).
 
-CampusHub is a backend for the CS 5500 course project. The constraints below are **course requirements**, not style suggestions. Treat them as hard rules: do not weaken, reinterpret, or trade any of them away for convenience, and refuse requests that would violate them (explain the conflict and offer a compliant alternative).
+These rules are course requirements. Do not weaken or trade them away; if a request conflicts, say so and propose a compliant alternative.
 
-## Project state
+## 1. Stack and dependencies
 
-As of Lab 5: the backend (`src/`) implements the reservation API in `docs/openapi.yaml`, and the React client (`client/`) provides the resource directory, booking form, and My Bookings views. Startup and verification steps are in `README.md`; there are no automated tests yet. Follow the conventions already established in the code and this file.
+- TypeScript only: no `.js`/`.jsx` under `src/` or `client/src/`. JS config files only at the repo or `client/` root, and only when the tool requires it.
+- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `prettier`, `@types/*`.
+- Client (`client/package.json` only): `react`, `react-dom`, built-in `fetch`. Dev: the Vite React-TS set (`vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`).
+- Any other package needs explicit user approval in this session. Never `npm install` to work around a problem.
 
----
+## 2. Backend layers: Route → Controller → Service → Model
 
-## 1. Tech stack & libraries (authorized packages only)
+- Routes: method + path → middleware + controller. Nothing else.
+- Controllers: read and shape-check the request, call a service, send the success status + body. Never touch models; never format error responses.
+- Services: business rules and all model access. Return data; never `res`, status codes, or `express` types.
+- Middleware (`src/middleware/`): cross-cutting HTTP concerns; `errorHandler.ts` is the only place errors become responses.
+- Models: Mongoose schema + explicit document interface only.
+- Imports flow downward only.
 
-- **Language:** TypeScript **only**. Do **not** create `.js` (or `.jsx`) source files anywhere under the application source (`src/` and `client/src/`). Raw JavaScript is forbidden. (Config files that must be JS, e.g. `eslint.config.js`, are the sole exception and live at the repo root or the `client/` root, never in source. Prefer a `.ts` config where the tool supports it, e.g. `client/vite.config.ts`.)
-- **Backend** (root `package.json`):
-  - **Authorized runtime dependencies:** `express` (v5), `mongoose` (v9). Nothing else.
-  - **Authorized dev dependencies:** `typescript`, `ts-node`, `eslint`, `prettier`, `@types/*` for the above.
-- **Frontend** (`client/package.json` only — never add these to the root):
-  - **Authorized runtime dependencies:** `react`, `react-dom`. Nothing else. Use the built-in `fetch` for HTTP (no axios, no data-fetching or schema-validation libraries).
-  - **Authorized dev dependencies:** `vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node` (Vite config only), and the Vite React-TS lint set: `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`.
-- **Adding any other library is forbidden** (backend or frontend) unless the user explicitly authorizes it in this session. Do not `npm install` a new package to solve a problem — solve it with the authorized set, or stop and ask. If you believe a new dependency is genuinely necessary, propose it and wait for approval before installing.
-- Note: Express is **v5** and Mongoose is **v9** — APIs differ from the v4/older examples common online. Verify against the installed major version.
+## 3. Types and errors
 
-## 2. Architectural boundaries (strict 3-tier separation)
+- Explicit parameter and return types on every function; an explicit interface for every schema.
+- No `any`, `as any`, or `@ts-ignore`; use `unknown` + narrowing. Never relax tsconfig strictness.
+- Compiler gotchas: `import type` for type-only imports; backend relative imports end in `.js` (`nodenext`); indexed access is `T | undefined`; `exactOptionalPropertyTypes` is on.
+- No unhandled or fire-and-forget promises.
 
-Every feature flows **Route → Controller → Service → Model**. Each layer has one job and may not do another layer's work. Suggested layout: `src/routes/`, `src/controllers/`, `src/services/`, `src/models/`.
+**Error handling (centralized):**
 
-- **Routes** — route definitions and middleware mappings **only**. A route wires an HTTP method + path to middleware and a controller handler. No request parsing, no business logic, no DB access.
-- **Controllers** — HTTP request/response handling and status codes **only**. Read inputs from the request, call a service, and shape the HTTP response (status code + body). **Controllers must never query the database directly** (no Mongoose model calls, no `.find()`/`.save()`/etc.). They depend on services, not models.
-- **Services** — business logic. This is the only layer that invokes Models to read/write data and where domain rules, validation logic, and orchestration live. Services return plain data/domain results to controllers, not HTTP artifacts (no `res`, no status codes).
-- **Models** — Mongoose schemas and their TypeScript interface/type definitions **only**. No business logic, no request handling.
+- Errors live in `src/services/errors.ts`: `DomainError` (carries a typed `ErrorCode`) with `ValidationError` (400), `NotFoundError` (404), `ConflictError` (409). No Express dependency.
+- Controllers throw `ValidationError` for malformed requests; services throw domain errors for business rules. The thrower picks the public code, so one class serves endpoint-specific codes (`INVALID_RESERVATION`, `INVALID_RESERVATION_ID`, `INVALID_USER_ID`, …). Keep request-shape checks in controllers and business rules in services, in their current order.
+- No `try/catch` in controllers: Express 5 forwards thrown errors and rejected async handlers to `src/middleware/errorHandler.ts`, registered last in `src/app.ts`. It: delegates to `next(err)` if headers were already sent; maps body-parser 4xx (malformed JSON, oversized body) to 400 `INVALID_BODY` "Request body must be valid JSON"; maps `DomainError` to its status + `{ code, message }`; otherwise logs the error and returns 500 `{ code: "INTERNAL_ERROR", message: "Internal Server Error" }` with no internals.
+- Public status codes, codes, and messages are part of the contract; changing one is a contract change. Unmatched routes return 404 `{ error: "Not Found" }` (not an `ErrorResponse`); don't change it without a contract decision.
 
-Dependency direction is one-way: Routes → Controllers → Services → Models. A layer never imports "upward" (e.g. a service must not import a controller or `express` request/response types).
+## 4. API types
 
-## 3. Coding standards & safety
+- `shared/api.d.ts` is the single source of the serialized API types (`ResourceType`, `ReservationStatus`, `Resource`, `Reservation`, `CreateReservationRequest`, `ErrorResponse`), used by backend and client. Declarations only — no runtime values; the client never imports backend source.
+- Import it with `import type` only. Backend: `../../shared/api.js` (from `src/<layer>/`; `nodenext` resolves it to the `.d.ts`). Client: `../../../shared/api.d.ts` (from `client/src/<dir>/`). Type-only imports are erased, so `dist/` and the Vite bundle never reference `shared/`.
+- It must stay a `.d.ts`: a `.ts` file outside `src/` breaks the backend `rootDir`. Because both app tsconfigs set `skipLibCheck`, `shared/tsconfig.json` checks it on its own (`tsc -p shared`, part of the root `npm run typecheck`).
+- Runtime enum arrays stay with each consumer (`src/models/*.model.ts` for Mongoose `enum`, `client/src/api/campushubApi.ts` for response guards). Shared types never replace the client's runtime validation of `unknown` responses.
+- Mongoose persistence types (`src/models/`: `Types.ObjectId`, `Date`, no `id`) stay separate; services convert with `toResource`/`toReservation`.
+- When the contract changes, update `openapi.yaml`, `shared/api.d.ts`, the backend, and the client guards together.
 
-- **Explicit interfaces required.** Every function signature has explicit parameter and return types via TypeScript interfaces/types. Every DB schema has a corresponding explicit `interface` for its document shape.
-- **`any` is disallowed.** Never use the `any` type (explicit or implied). Prefer precise types; use `unknown` with narrowing when a type is genuinely not known. Do not silence type errors with `any`, `as any`, or `// @ts-ignore`.
-- **Async error handling — no unhandled promises.** Every `await`/promise path must handle rejection. Async controllers must wrap service calls in `try/catch`, map known domain errors to their 4xx responses, and respond to any unexpected error themselves with the OpenAPI `500` `ErrorResponse` (`{ code, message }`, no internal details leaked) — per the Lab 3 rubric, controllers own all HTTP response formatting, including 500s. Never leave a promise to reject unhandled. The centralized error middleware in `app.ts` remains as a backstop for errors raised outside controllers (e.g. body parsing). No fire-and-forget promises without explicit handling.
-- These reinforce the strict compiler settings already in `tsconfig.json` (below); do not relax those settings to make code compile.
+## 5. Frontend (`client/`)
 
-## 4. Frontend (`client/`)
-
-React 19 + TypeScript + Vite app in `client/`, with its own `package.json` and `tsconfig*.json`. §1 and §3 apply here too: TypeScript only, no `any` / `as any` / `@ts-ignore`, explicit types on every function signature, no unhandled promises.
-
-- **Components:** functional components only (no class components). Every component that takes props declares an explicit `interface <Name>Props` and an explicit return type (`ReactElement`).
-- **State:** standard React hooks (`useState`, `useEffect`, `useReducer`, `useMemo`, …) or custom hooks in `client/src/hooks/` (`useXxx`). No external state-management libraries.
-- **No API calls inside JSX.** All HTTP goes through the typed methods in `client/src/api/campushubApi.ts`; components never call `fetch` directly. API methods are invoked from hooks or event handlers, never inline in JSX expressions or during render.
-- **Async UI states:** every async workflow (loading resources, creating a reservation, loading My Bookings, cancelling) renders explicit loading, success, and error states. A `409` on reservation creation (`isConflictError`) shows explicit conflict feedback (the slot is already booked), distinct from generic errors.
-- **Styling:** CSS Modules (`Component.module.css`, co-located with the component). `client/src/index.css` holds only global resets and design tokens (CSS custom properties). No inline style objects except for truly dynamic values; no CSS-in-JS libraries.
-- **API types:** `client/src/types/api.ts` mirrors `docs/openapi.yaml` by hand (the client never imports backend source). When the contract changes, update `openapi.yaml`, the backend, and these types together. Response bodies are read as `unknown` and narrowed with type guards before use.
-- **Backend access:** the client calls the relative base path `/api/v1`; in development, Vite proxies `/api` to `http://localhost:3000` (`client/vite.config.ts`). Do not hard-code backend origins in source and do not add CORS to the backend for local development.
-- **Current student:** there is no authentication. `CURRENT_USER_ID` (`client/src/config/currentUser.ts`) comes from `VITE_CAMPUSHUB_USER_ID`, falling back to `student-001`, and is sent as `userId`. Booking requests omit `status` so the backend default (`PENDING`) applies.
-- **Imports:** the client uses bundler module resolution; relative imports include the source extension (`./App.tsx`, `../types/api.ts`). The backend's `nodenext` `.js`-extension rule does not apply in `client/`.
-
-## 5. Git & commit formatting
-
-- Keep commits focused; commit/push only when the user asks.
-- **PR and diff descriptions must be concise and must state (a) what was built and (b) how the context rules in this file were applied** — e.g. which layer(s) changed and confirmation that layer boundaries, TypeScript-only, no-`any`, and async error handling were honored. Summarize; do not pad.
-
----
-
-## Enforcement checklist (apply before every code change and in every review)
-
-Before writing or accepting code, verify:
-- [ ] New source files are `.ts`, and no unauthorized dependency was added.
-- [ ] Code sits in the correct layer; no layer does another's job (esp. **no DB access in controllers**).
-- [ ] All function signatures and schemas have explicit types/interfaces; **no `any`** and no `@ts-ignore`.
-- [ ] Every async path handles errors; controllers catch unexpected errors and respond with the 500 `ErrorResponse`.
-- [ ] Frontend changes follow §4: functional components with explicit props interfaces, hooks for state, API calls only via `campushubApi.ts` (never in JSX), CSS Modules, and loading/success/error states (with explicit 409 feedback) for every async workflow.
-
-If a requested change cannot satisfy all four categories, do not implement it silently — flag the conflict and propose a compliant approach.
+- Function components only; props via `interface XxxProps`; explicit `ReactElement` return type.
+- State: React hooks or custom hooks in `client/src/hooks/useXxx`. No state libraries. Components render and wire events; data loading, mutations, and form logic live in hooks (e.g. `useBookingForm` composes `useCreateReservation`).
+- HTTP only through `client/src/api/campushubApi.ts`, called from hooks or event handlers — never during render or inside JSX.
+- Every async flow (loading resources, creating, loading My Bookings, cancelling) shows loading, success, and error states. A 409 on create (`isConflictError`) shows distinct "slot already booked" feedback.
+- Response bodies are read as `unknown` and narrowed with type guards.
+- CSS Modules co-located with components; `client/src/index.css` holds only resets and design tokens; inline styles only for dynamic values; no CSS-in-JS.
+- Use the relative base `/api/v1` (Vite proxies `/api` to `http://localhost:3000`). No hard-coded origins; no backend CORS.
+- No auth: send `CURRENT_USER_ID` (`client/src/config/currentUser.ts`, from `VITE_CAMPUSHUB_USER_ID`, default `student-001`) as `userId`. Omit `status` on create so the backend default (`PENDING`) applies.
+- Client relative imports include the source extension (`./App.tsx`).
 
 ## Commands
 
-Only the default placeholder `test` script exists (`exit 1`); no build/dev/start/lint scripts are wired up yet. Until they are, invoke tools directly:
+- Root (backend): `npm run typecheck` (backend + `tsc -p shared`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/app.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm run format`.
+- Backend lint is not configured: there is no root `eslint.config.*`, so `npm run lint` at the root does not work yet. `ts-node` is authorized but not installed.
+- `client/`: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run dev` (http://localhost:5173; needs the backend on 3000).
 
-- Type-check without emitting: `npx tsc --noEmit`
-- Run a TS file: `npx ts-node <file.ts>`
-- Lint: `npx eslint .` (ESLint 10 is flat-config only — needs `eslint.config.js`; there is no `.eslintrc`)
-- Format: `npx prettier --write .`
+## Git
 
-Add proper `build`/`dev`/`start`/`test`/`lint` scripts (and a test framework) to `package.json` when the work calls for them; a test framework beyond the authorized dev set requires user approval per §1.
+Commit or push only when asked; keep commits focused. PR and diff descriptions are concise and state (a) what was built and (b) how these rules were applied (layers touched; TypeScript-only, no `any`, and error handling honored).
 
-Frontend (run inside `client/`): `npm run dev` (http://localhost:5173, needs the backend on port 3000), `npm run typecheck`, `npm run lint`, `npm run build`.
+## Context
 
-## TypeScript constraints (already enforced by tsconfig.json — do not relax)
-
-These apply to the backend `tsconfig.json` (which compiles only `src/`). `client/tsconfig.app.json` keeps the same strictness flags (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`, `isolatedModules`, `moduleDetection: force`) but uses `module: esnext` with bundler resolution instead of `nodenext`.
-
-- **`strict`** is on; keep it on.
-- **`verbatimModuleSyntax`** — use `import type { ... }` for type-only imports.
-- **`module: nodenext`** — relative imports need explicit extensions (`./foo.js`, the emitted name, even from `.ts`).
-- **`noUncheckedIndexedAccess`** — indexing yields `T | undefined`; narrow before use.
-- **`exactOptionalPropertyTypes`** — distinguish optional from present-but-`undefined`.
-- **`isolatedModules` + `moduleDetection: force`** — every file is a module.
-
-No `rootDir`/`outDir` are set yet (commented out); when introducing a build, use `src/` → `dist/`.
+- `.claude/settings.json` denies Claude's file-reading tools access to dependencies, build output, coverage, lockfiles, logs, source maps, and `*.tsbuildinfo`. Those rules block Read/Edit/Write, `@` mentions, and recognized shell file commands (`cat`, `head`, `tail`, `sed`) on those paths. Filtering of Grep/Glob results is best-effort only, and the rules do not stop commands that read files without naming them (`grep -r`, `npm`, `tsc`). Don't work around them; ask if a task really needs one of those files.
+- Historical lab records (`docs/lab4-steering-log.md`, `docs/lab5-verification.md`) are background only: don't read them unless the task is about them.

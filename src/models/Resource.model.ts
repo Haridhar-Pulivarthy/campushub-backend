@@ -8,7 +8,7 @@
 import { Schema, model } from "mongoose";
 import type { Model } from "mongoose";
 
-import type { ResourceType } from "../types/reservation.js";
+import type { ResourceType } from "../../shared/api.js";
 
 /** Allowed values for Resource.type (OpenAPI enum). */
 export const RESOURCE_TYPES: readonly ResourceType[] = [

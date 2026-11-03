@@ -8,46 +8,18 @@
  */
 import { Types } from "mongoose";
 
+import type {
+  CreateReservationRequest,
+  Reservation,
+  ReservationStatus,
+} from "../../shared/api.js";
 import {
   RESERVATION_STATUSES,
   ReservationModel,
   type IReservation,
 } from "../models/Reservation.model.js";
 import { ResourceModel, type IResource } from "../models/Resource.model.js";
-import type { Reservation, ReservationStatus } from "../types/reservation.js";
-
-/** Thrown when input fails a domain validation rule. */
-export class ValidationError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = "ValidationError";
-  }
-}
-
-/** Thrown when a reservation overlaps an existing one. */
-export class ConflictError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = "ConflictError";
-  }
-}
-
-/** Thrown when a referenced reservation does not exist. */
-export class NotFoundError extends Error {
-  public constructor(message: string) {
-    super(message);
-    this.name = "NotFoundError";
-  }
-}
-
-/** Fields a client may supply when creating a reservation. */
-export interface CreateReservationInput {
-  resourceId: string;
-  userId: string;
-  startTime: string;
-  endTime: string;
-  status?: ReservationStatus;
-}
+import { ConflictError, NotFoundError, ValidationError } from "./errors.js";
 
 /** A lean Reservation document as returned by Mongoose queries. */
 type LeanReservation = IReservation & { _id: Types.ObjectId };
@@ -70,14 +42,20 @@ export function coerceStatus(value: unknown): ReservationStatus | undefined {
   if (typeof value === "string" && isReservationStatus(value)) {
     return value;
   }
-  throw new ValidationError("status must be PENDING, CONFIRMED, or CANCELLED");
+  throw new ValidationError(
+    "INVALID_RESERVATION",
+    "status must be PENDING, CONFIRMED, or CANCELLED",
+  );
 }
 
 /** Parse an ISO-8601 date-time string, throwing ValidationError if invalid. */
 function parseInstant(value: string, field: string): Date {
   const ms = Date.parse(value);
   if (Number.isNaN(ms)) {
-    throw new ValidationError(`${field} must be a valid ISO-8601 date-time`);
+    throw new ValidationError(
+      "INVALID_RESERVATION",
+      `${field} must be a valid ISO-8601 date-time`,
+    );
   }
   return new Date(ms);
 }
@@ -101,24 +79,30 @@ function toReservation(doc: LeanReservation): Reservation {
  * @throws ConflictError when the resource is already reserved for the range.
  */
 export async function createReservation(
-  input: CreateReservationInput,
+  input: CreateReservationRequest,
 ): Promise<Reservation> {
   const { resourceId, userId, startTime, endTime, status } = input;
 
   if (typeof resourceId !== "string" || resourceId.trim() === "") {
-    throw new ValidationError("resourceId is required");
+    throw new ValidationError("INVALID_RESERVATION", "resourceId is required");
   }
   if (!OBJECT_ID_PATTERN.test(resourceId)) {
-    throw new ValidationError("resourceId must be a valid ObjectId");
+    throw new ValidationError(
+      "INVALID_RESERVATION",
+      "resourceId must be a valid ObjectId",
+    );
   }
   if (typeof userId !== "string" || userId.trim() === "") {
-    throw new ValidationError("userId is required");
+    throw new ValidationError("INVALID_RESERVATION", "userId is required");
   }
 
   const start = parseInstant(startTime, "startTime");
   const end = parseInstant(endTime, "endTime");
   if (start.getTime() >= end.getTime()) {
-    throw new ValidationError("startTime must be before endTime");
+    throw new ValidationError(
+      "INVALID_RESERVATION",
+      "startTime must be before endTime",
+    );
   }
 
   const resourceObjectId = new Types.ObjectId(resourceId);
@@ -128,10 +112,16 @@ export async function createReservation(
     .lean<Pick<IResource, "isAvailable">>()
     .exec();
   if (resource === null) {
-    throw new ValidationError(`Unknown resourceId: ${resourceId}`);
+    throw new ValidationError(
+      "INVALID_RESERVATION",
+      `Unknown resourceId: ${resourceId}`,
+    );
   }
   if (!resource.isAvailable) {
-    throw new ValidationError(`Resource ${resourceId} is not available`);
+    throw new ValidationError(
+      "INVALID_RESERVATION",
+      `Resource ${resourceId} is not available`,
+    );
   }
 
   // Two intervals overlap when each starts before the other ends.
@@ -143,6 +133,7 @@ export async function createReservation(
   }).exec();
   if (conflict !== null) {
     throw new ConflictError(
+      "RESERVATION_CONFLICT",
       `Resource ${resourceId} is already reserved for the requested time`,
     );
   }
@@ -165,7 +156,10 @@ export async function createReservation(
  */
 export async function cancelReservation(id: string): Promise<Reservation> {
   if (typeof id !== "string" || !OBJECT_ID_PATTERN.test(id)) {
-    throw new ValidationError("id must be a valid ObjectId");
+    throw new ValidationError(
+      "INVALID_RESERVATION_ID",
+      "id must be a valid ObjectId",
+    );
   }
   const reservationId = new Types.ObjectId(id);
 
@@ -187,7 +181,10 @@ export async function cancelReservation(id: string): Promise<Reservation> {
     .lean<LeanReservation>()
     .exec();
   if (existing === null) {
-    throw new NotFoundError(`Reservation ${id} not found`);
+    throw new NotFoundError(
+      "RESERVATION_NOT_FOUND",
+      `Reservation ${id} not found`,
+    );
   }
   return toReservation(existing);
 }
@@ -200,7 +197,7 @@ export async function getUserReservations(
   userId: string,
 ): Promise<Reservation[]> {
   if (typeof userId !== "string" || userId.trim() === "") {
-    throw new ValidationError("userId is required");
+    throw new ValidationError("INVALID_USER_ID", "userId is required");
   }
   const docs = await ReservationModel.find({
     userId,

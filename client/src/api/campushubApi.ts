@@ -8,18 +8,26 @@
  * failure is thrown as an `ApiError` so callers can branch on `status`
  * (e.g. 409 for a booking conflict).
  */
-import {
-  RESERVATION_STATUSES,
-  RESOURCE_TYPES,
-  type CreateReservationDTO,
-  type ErrorResponse,
-  type Reservation,
-  type ReservationStatus,
-  type Resource,
-  type ResourceType,
-} from "../types/api.ts";
+import type {
+  CreateReservationRequest,
+  ErrorResponse,
+  Reservation,
+  ReservationStatus,
+  Resource,
+  ResourceType,
+} from "../../../shared/api.d.ts";
 
 const API_BASE_URL = "/api/v1";
+
+/** Allowed Resource.type values, checked at runtime by the response guards. */
+const RESOURCE_TYPES: readonly ResourceType[] = ["ROOM", "EQUIPMENT", "LAB"];
+
+/** Allowed Reservation.status values, checked at runtime by the guards. */
+const RESERVATION_STATUSES: readonly ReservationStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+];
 
 /** `status` used for failures where no HTTP response was received. */
 const NO_RESPONSE_STATUS = 0;
@@ -174,7 +182,7 @@ export async function fetchResources(type?: ResourceType): Promise<Resource[]> {
  * A 409 ApiError (see isConflictError) means the slot is already booked.
  */
 export async function createReservation(
-  payload: CreateReservationDTO,
+  payload: CreateReservationRequest,
 ): Promise<Reservation> {
   return request(
     "/reservations",

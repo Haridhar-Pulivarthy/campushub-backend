@@ -3,11 +3,12 @@
 Campus resource reservation system for CS 5500. This repository holds both
 parts of the app:
 
-| Path      | What                                                          |
-| --------- | ------------------------------------------------------------- |
-| `src/`    | Backend — Express 5 + Mongoose 9 (TypeScript), port 3000      |
-| `client/` | Frontend — React 19 + TypeScript + Vite, port 5173            |
-| `docs/`   | OpenAPI contract (`openapi.yaml`), steering and audit records |
+| Path      | What                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`    | Backend — Express 5 + Mongoose 9 (TypeScript), port 3000; domain errors in `services/errors.ts`, one error handler in `middleware/errorHandler.ts`                        |
+| `client/` | Frontend — React 19 + TypeScript + Vite, port 5173; data and form logic in `src/hooks/` (`useResources`, `useCreateReservation`, `useUserReservations`, `useBookingForm`) |
+| `shared/` | API types used by both backend and client (`api.d.ts`, declarations only)                                                                                                 |
+| `docs/`   | OpenAPI contract (`openapi.yaml`), steering, verification, and refactoring records                                                                                        |
 
 Project rules for contributors (and AI assistants) are in `CLAUDE.md`.
 
@@ -92,7 +93,7 @@ Base URL `http://localhost:3000/api/v1`; full contract in `docs/openapi.yaml`.
 Automated checks:
 
 ```powershell
-# Backend (repository root)
+# Backend (repository root); typecheck also checks shared/api.d.ts
 npm run typecheck
 npm run build
 
@@ -117,4 +118,9 @@ and confirm the 409 conflict message; cancel and confirm the list refreshes;
 stop the backend and confirm the error and Retry recovery.
 
 Lab 5 results — which checks were automated and which were manual — are
-recorded in `docs/lab5-verification.md`.
+recorded in `docs/lab5-verification.md`. Lab 6 context optimization,
+refactoring, and verification are recorded in
+[`docs/lab6-refactoring.md`](docs/lab6-refactoring.md).
+
+Backend lint is not configured yet (there is no root `eslint.config.*`), so
+`npm run lint` works only in `client/`.

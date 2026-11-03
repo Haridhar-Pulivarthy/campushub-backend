@@ -1,7 +1,7 @@
 /**
  * Display labels for API enum values.
  */
-import type { ReservationStatus, ResourceType } from "../types/api.ts";
+import type { ReservationStatus, ResourceType } from "../../../shared/api.d.ts";
 
 export const RESOURCE_TYPE_LABELS: Readonly<Record<ResourceType, string>> = {
   ROOM: "Room",

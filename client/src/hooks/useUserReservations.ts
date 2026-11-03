@@ -7,11 +7,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+import type { Reservation } from "../../../shared/api.d.ts";
 import {
   cancelReservation,
   fetchUserReservations,
 } from "../api/campushubApi.ts";
-import type { Reservation } from "../types/api.ts";
 import { getErrorMessage } from "../utils/errors.ts";
 
 export type CancelState =

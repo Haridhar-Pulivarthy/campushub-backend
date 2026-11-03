@@ -5,8 +5,8 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 
+import type { Resource, ResourceType } from "../../../shared/api.d.ts";
 import { useResources } from "../hooks/useResources.ts";
-import type { Resource, ResourceType } from "../types/api.ts";
 import { RESOURCE_TYPE_LABELS } from "../utils/labels.ts";
 import styles from "./ResourceList.module.css";
 import StatusMessage from "./StatusMessage.tsx";

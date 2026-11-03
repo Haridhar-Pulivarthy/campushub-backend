@@ -6,12 +6,12 @@
  */
 import type { Types } from "mongoose";
 
+import type { Resource, ResourceType } from "../../shared/api.js";
 import {
   RESOURCE_TYPES,
   ResourceModel,
   type IResource,
 } from "../models/Resource.model.js";
-import type { Resource, ResourceType } from "../types/reservation.js";
 
 /** A lean Resource document as returned by Mongoose queries. */
 type LeanResource = IResource & { _id: Types.ObjectId };

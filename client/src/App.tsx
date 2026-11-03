@@ -7,12 +7,12 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
 
+import type { Resource } from "../../shared/api.d.ts";
 import styles from "./App.module.css";
 import BookingForm from "./components/BookingForm.tsx";
 import ResourceList from "./components/ResourceList.tsx";
 import UserReservations from "./components/UserReservations.tsx";
 import { CURRENT_USER_ID } from "./config/currentUser.ts";
-import type { Resource } from "./types/api.ts";
 
 function App(): ReactElement {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(

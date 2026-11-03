@@ -1,0 +1,20 @@
+{
+  // Checks the shared API declarations on their own. The backend and client
+  // configs set skipLibCheck, which skips errors inside .d.ts files, so this
+  // project is the only place shared/*.d.ts is fully type-checked.
+  "include": ["*.d.ts"],
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "types": [],
+    "noEmit": true,
+    "skipLibCheck": false,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force"
+  }
+}

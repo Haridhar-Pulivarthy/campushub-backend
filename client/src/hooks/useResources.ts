@@ -3,8 +3,8 @@
  */
 import { useEffect, useState } from "react";
 
+import type { Resource, ResourceType } from "../../../shared/api.d.ts";
 import { fetchResources } from "../api/campushubApi.ts";
-import type { Resource, ResourceType } from "../types/api.ts";
 import { getErrorMessage } from "../utils/errors.ts";
 
 export type ResourcesState =

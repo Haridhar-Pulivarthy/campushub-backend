@@ -9,7 +9,7 @@
 import { Schema, model } from "mongoose";
 import type { Model, Types } from "mongoose";
 
-import type { ReservationStatus } from "../types/reservation.js";
+import type { ReservationStatus } from "../../shared/api.js";
 
 /** Allowed values for Reservation.status (OpenAPI enum). */
 export const RESERVATION_STATUSES: readonly ReservationStatus[] = [

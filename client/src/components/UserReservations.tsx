@@ -5,10 +5,10 @@
 import { useMemo, useState } from "react";
 import type { ReactElement } from "react";
 
+import type { Reservation, Resource } from "../../../shared/api.d.ts";
 import { useResources } from "../hooks/useResources.ts";
 import { useUserReservations } from "../hooks/useUserReservations.ts";
 import type { CancelState } from "../hooks/useUserReservations.ts";
-import type { Reservation, Resource } from "../types/api.ts";
 import { formatDateTime } from "../utils/datetime.ts";
 import { RESERVATION_STATUS_LABELS } from "../utils/labels.ts";
 import StatusMessage from "./StatusMessage.tsx";

@@ -3,8 +3,11 @@
  */
 import { useRef, useState } from "react";
 
+import type {
+  CreateReservationRequest,
+  Reservation,
+} from "../../../shared/api.d.ts";
 import { createReservation, isConflictError } from "../api/campushubApi.ts";
-import type { CreateReservationDTO, Reservation } from "../types/api.ts";
 import { getErrorMessage } from "../utils/errors.ts";
 
 export const CONFLICT_MESSAGE =
@@ -24,7 +27,7 @@ export interface UseCreateReservationResult {
    * it failed (see `state`) or another submission is already in flight.
    */
   submit: (
-    payload: CreateReservationDTO,
+    payload: CreateReservationRequest,
     resourceName: string,
   ) => Promise<Reservation | null>;
   /** Clear success/error feedback. Has no effect while submitting. */
@@ -39,7 +42,7 @@ export function useCreateReservation(): UseCreateReservationResult {
   const inFlight = useRef<boolean>(false);
 
   async function submit(
-    payload: CreateReservationDTO,
+    payload: CreateReservationRequest,
     resourceName: string,
   ): Promise<Reservation | null> {
     if (inFlight.current) {

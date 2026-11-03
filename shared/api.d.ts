@@ -1,28 +1,21 @@
 /**
- * API types for the CampusHub backend.
+ * Serialized CampusHub API types, shared by the backend (`src/`) and the
+ * client (`client/src/`).
  *
- * Mirrors the schemas in docs/openapi.yaml. The client cannot import backend
- * source, so these are kept in sync with the contract by hand. `date-time`
- * fields are ISO-8601 strings, matching the JSON wire format.
+ * Mirrors the schemas in docs/openapi.yaml: these are JSON wire shapes, so
+ * ids are strings and `date-time` fields are ISO-8601 strings. Mongoose
+ * persistence types (ObjectId, Date) stay in `src/models/`.
+ *
+ * Declarations only: import with `import type`. Runtime enum values and
+ * response validation live with each consumer; these types do not validate
+ * anything at runtime.
  */
 
 /** Category of a campus resource (Resource.type enum). */
 export type ResourceType = "ROOM" | "EQUIPMENT" | "LAB";
 
-export const RESOURCE_TYPES: readonly ResourceType[] = [
-  "ROOM",
-  "EQUIPMENT",
-  "LAB",
-];
-
 /** Reservation lifecycle status (Reservation.status enum). */
 export type ReservationStatus = "PENDING" | "CONFIRMED" | "CANCELLED";
-
-export const RESERVATION_STATUSES: readonly ReservationStatus[] = [
-  "PENDING",
-  "CONFIRMED",
-  "CANCELLED",
-];
 
 /** A bookable campus resource (Resource schema). */
 export interface Resource {
@@ -46,10 +39,10 @@ export interface Reservation {
 }
 
 /**
- * Body of POST /reservations (CreateReservationRequest schema). UI booking
- * requests omit `status` so the backend applies its default (PENDING).
+ * Body of POST /reservations (CreateReservationRequest schema). `status` is
+ * optional; when omitted the backend applies its default (PENDING).
  */
-export interface CreateReservationDTO {
+export interface CreateReservationRequest {
   resourceId: string;
   userId: string;
   /** ISO-8601 date-time string. */
