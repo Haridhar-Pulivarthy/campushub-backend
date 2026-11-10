@@ -1,7 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-/** The Express backend (see ../src/app.ts); it listens on port 3000. */
+/** The Express backend (see ../src/server.ts); it listens on port 3000. */
 const BACKEND_ORIGIN = "http://localhost:3000";
 
 // https://vite.dev/config/

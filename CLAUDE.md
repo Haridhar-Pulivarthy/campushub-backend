@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-CampusHub (CS 5500): Express 5 + Mongoose 9 backend in `src/`, React 19 + Vite client in `client/`, shared API types in `shared/`. API contract: `docs/openapi.yaml`. Setup, run, and manual checks: `README.md`. No automated tests yet. Current lab: Lab 6 (refactoring and context optimization).
+CampusHub (CS 5500): Express 5 + Mongoose 9 backend in `src/`, React 19 + Vite client in `client/`, shared API types in `shared/`. API contract: `docs/openapi.yaml`. Setup, run, and manual checks: `README.md`. Backend tests: Jest + Supertest on an in-memory MongoDB (`docs/lab7-testing.md`). Current lab: Lab 7 (backend testing and coverage).
 
 These rules are course requirements. Do not weaken or trade them away; if a request conflicts, say so and propose a compliant alternative.
 
 ## 1. Stack and dependencies
 
 - TypeScript only: no `.js`/`.jsx` under `src/` or `client/src/`. JS config files only at the repo or `client/` root, and only when the tool requires it.
-- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `prettier`, `@types/*`.
+- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `prettier`, `@types/*`, `jest`, `ts-jest`, `supertest`, `mongodb-memory-server`.
 - Client (`client/package.json` only): `react`, `react-dom`, built-in `fetch`. Dev: the Vite React-TS set (`vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`).
 - Any other package needs explicit user approval in this session. Never `npm install` to work around a problem.
 
@@ -57,7 +57,7 @@ These rules are course requirements. Do not weaken or trade them away; if a requ
 
 ## Commands
 
-- Root (backend): `npm run typecheck` (backend + `tsc -p shared`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/app.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm run format`.
+- Root (backend): `npm run typecheck` (backend + `tsc -p shared`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/server.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm test` (Jest; no `MONGODB_URI` needed), `npx jest --coverage`, `npx tsc -p tsconfig.test.json` (type-checks tests), `npm run format`.
 - Backend lint is not configured: there is no root `eslint.config.*`, so `npm run lint` at the root does not work yet. `ts-node` is authorized but not installed.
 - `client/`: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run dev` (http://localhost:5173; needs the backend on 3000).
 

@@ -1,0 +1,17 @@
+{
+  // Used only by ts-jest. Jest runs the backend as CommonJS, so this swaps the
+  // ESM module settings; every strictness option is inherited unchanged.
+  "extends": "./tsconfig.json",
+  "include": ["src"],
+  "exclude": [],
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": false,
+    // Off so ts-jest type-checks instead of transpiling each file on its own.
+    "isolatedModules": false,
+    "noEmit": true,
+    "types": ["node", "jest"]
+  }
+}

@@ -2,6 +2,8 @@
   // Visit https://aka.ms/tsconfig to read more about this file
   // Backend only: the React client in client/ has its own tsconfig.
   "include": ["src"],
+  // Test code never reaches dist/; tsconfig.test.json compiles it for Jest.
+  "exclude": ["src/test", "src/**/*.test.ts"],
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",
