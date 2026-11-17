@@ -16,8 +16,13 @@ concurrency:
 jobs:
   backend:
     name: Backend (lint + Jest)
-    runs-on: ubuntu-latest
+    # Pinned to the image the first passing run used (Part 1, run 44022665210).
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
+    outputs:
+      # failure | success | skipped. Auto-heal runs only on "failure", so a
+      # failed install or lint (which skips Jest) never triggers it.
+      test_outcome: ${{ steps.jest.outcome }}
     env:
       # mongodb-memory-server downloads a mongod binary on first use; pin the
       # location so it can be cached between runs. No MongoDB service is needed.
@@ -37,6 +42,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Auto-heal policy tests
+        run: npm run test:scripts
+
       - name: Cache MongoDB binary
         uses: actions/cache@v4
         with:
@@ -44,11 +52,26 @@ jobs:
           key: mongoms-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
 
       - name: Test
-        run: npm test -- --ci
+        id: jest
+        shell: bash
+        # pipefail keeps Jest's exit status; tee keeps the output visible.
+        run: |
+          set -o pipefail
+          npm test -- --ci 2>&1 | tee test-results.log
+
+      - name: Upload Jest log
+        if: ${{ !cancelled() && steps.jest.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: jest-results
+          path: test-results.log
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
 
   client:
     name: Client (lint)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     defaults:
       run:
@@ -67,3 +90,273 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+  # One AI repair attempt when Jest fails on a same-repository PR. Read-only:
+  # it proposes and verifies a patch; auto-heal-publish pushes it.
+  auto-heal:
+    name: Auto-heal (repair + verify)
+    needs: backend
+    # failure() lets this run after the backend job fails; test_outcome then
+    # limits it to Jest failures.
+    if: >-
+      ${{ failure()
+      && github.event_name == 'pull_request'
+      && needs.backend.outputs.test_outcome == 'failure'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !startsWith(github.head_ref, 'fix/auto-heal-') }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      has_patch: ${{ steps.package.outputs.has_patch }}
+    env:
+      MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.cache/mongodb-binaries
+      HEAL_DIR: ${{ runner.temp }}/auto-heal
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Check out the failing PR head commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The repair scripts come from the base branch, so a PR cannot change
+      # the code that holds the API key or enforces the edit policy.
+      - name: Check out repair tools from the base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .heal-tools
+          sparse-checkout: scripts/auto-heal
+          persist-credentials: false
+
+      - name: Hide repair tools from git status
+        run: echo ".heal-tools/" >> .git/info/exclude
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .heal-tools/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The tools resolve @anthropic-ai/sdk from .heal-tools/node_modules,
+      # installed from the base branch's lockfile, not the PR's.
+      - name: Install repair tool dependencies (base lockfile)
+        working-directory: .heal-tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Cache MongoDB binary
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.MONGOMS_DOWNLOAD_DIR }}
+          key: mongoms-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
+
+      # CI tests the PR merge commit. Re-run Jest on the exact head commit; this
+      # log is what the model sees, and a pass here skips the paid request.
+      - name: Reproduce failure on the head commit
+        id: reproduce
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$HEAL_DIR"
+          if npm test -- --ci 2>&1 | tee "$HEAL_DIR/head-test-results.log"; then
+            echo "reproduced=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Auto-heal skipped::Jest passes on $HEAD_SHA; the failure comes from merging with the base branch."
+          else
+            echo "reproduced=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Request one repair from Claude
+        id: repair
+        if: steps.reproduce.outputs.reproduced == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.AUTO_HEAL_MODEL || 'claude-opus-5-5' }}
+          AUTO_HEAL_EFFORT: ${{ vars.AUTO_HEAL_EFFORT || 'high' }}
+          TEST_LOG: ${{ env.HEAL_DIR }}/head-test-results.log
+          OUT_DIR: ${{ env.HEAL_DIR }}/out
+        run: node .heal-tools/scripts/auto-heal/repair.ts
+
+      # Verification runs the patched code without the API key or any token.
+      - name: Verify - lint
+        id: verify_lint
+        if: steps.repair.outputs.applied == 'true'
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Verify - typecheck
+        id: verify_typecheck
+        if: steps.repair.outputs.applied == 'true'
+        continue-on-error: true
+        run: npm run typecheck
+
+      - name: Verify - full Jest suite
+        id: verify_test
+        if: steps.repair.outputs.applied == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test -- --ci 2>&1 | tee "$HEAL_DIR/out/verify-test-results.log"
+
+      - name: Verify - only allowed source changed
+        id: verify_scope
+        if: steps.repair.outputs.applied == 'true'
+        run: node .heal-tools/scripts/auto-heal/check-changes.ts --require-changes
+
+      - name: Package verified patch
+        id: package
+        if: steps.repair.outputs.applied == 'true'
+        shell: bash
+        env:
+          OUT_DIR: ${{ env.HEAL_DIR }}/out
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          LINT_RESULT: ${{ steps.verify_lint.outcome }}
+          TYPECHECK_RESULT: ${{ steps.verify_typecheck.outcome }}
+          TEST_RESULT: ${{ steps.verify_test.outcome }}
+          VERIFY_LOG: ${{ env.HEAL_DIR }}/out/verify-test-results.log
+        run: |
+          node .heal-tools/scripts/auto-heal/pr-body.ts
+          if [ "$LINT_RESULT" != success ] || [ "$TYPECHECK_RESULT" != success ] || [ "$TEST_RESULT" != success ]; then
+            echo "::error title=Auto-heal verification failed::lint=$LINT_RESULT typecheck=$TYPECHECK_RESULT jest=$TEST_RESULT; no PR will be opened."
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          git diff --binary -- src > "$OUT_DIR/auto-heal.patch"
+          echo "has_patch=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified patch
+        if: steps.package.outputs.has_patch == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: auto-heal-patch
+          path: |
+            ${{ env.HEAL_DIR }}/out/auto-heal.patch
+            ${{ env.HEAL_DIR }}/out/pr-title.txt
+            ${{ env.HEAL_DIR }}/out/pr-body.md
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 7
+
+      - name: Upload repair diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: auto-heal-diagnostics
+          path: ${{ env.HEAL_DIR }}
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 7
+
+  # The only job with write access. It runs no project code: it applies the
+  # verified patch, re-checks its scope, pushes fix/auto-heal-<run_id>, and
+  # opens (or updates) a PR into the original PR's branch.
+  auto-heal-publish:
+    name: Auto-heal (open repair PR)
+    needs: auto-heal
+    if: ${{ !cancelled() && needs.auto-heal.result == 'success' && needs.auto-heal.outputs.has_patch == 'true' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PR_HEAD_REF: ${{ github.head_ref }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      REPAIR_BRANCH: fix/auto-heal-${{ github.run_id }}
+      PATCH_DIR: ${{ runner.temp }}/auto-heal-patch
+    steps:
+      # The repair was tested against HEAD_SHA only; never publish it onto a
+      # branch that has moved since.
+      - name: Abort if the PR head moved or the PR closed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read -r state current < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '"\(.state) \(.head.sha)"')
+          if [ "$state" != open ] || [ "$current" != "$HEAD_SHA" ]; then
+            echo "::error title=Auto-heal not published::PR #$PR_NUMBER is $state at $current; the repair was verified against $HEAD_SHA."
+            exit 1
+          fi
+
+      - name: Check out the failing PR head commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out repair tools from the base branch
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .heal-tools
+          sparse-checkout: scripts/auto-heal
+          persist-credentials: false
+
+      - name: Hide repair tools from git status
+        run: echo ".heal-tools/" >> .git/info/exclude
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Download verified patch
+        uses: actions/download-artifact@v8
+        with:
+          name: auto-heal-patch
+          path: ${{ env.PATCH_DIR }}
+
+      - name: Apply patch and re-check scope
+        run: |
+          git apply --index "$PATCH_DIR/auto-heal.patch"
+          node .heal-tools/scripts/auto-heal/check-changes.ts --require-changes
+
+      # Reruns of this run reuse the branch: the new commit's parent is the
+      # existing branch tip, so the push is a fast-forward (never forced).
+      - name: Push repair branch
+        shell: bash
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898583+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898583+github-actions[bot]@users.noreply.github.com
+        run: |
+          tree=$(git write-tree)
+          parent="$HEAD_SHA"
+          if git ls-remote --exit-code --heads origin "$REPAIR_BRANCH" > /dev/null; then
+            git fetch --no-tags origin "refs/heads/$REPAIR_BRANCH"
+            parent=$(git rev-parse FETCH_HEAD)
+            if [ "$(git rev-parse "$parent^{tree}")" = "$tree" ]; then
+              echo "$REPAIR_BRANCH already contains this repair."
+              exit 0
+            fi
+          fi
+          commit=$({ head -n 1 "$PATCH_DIR/pr-title.txt"; echo; echo "Verified by lint, typecheck, and Jest in ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; } | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit:refs/heads/$REPAIR_BRANCH"
+
+      - name: Open or update repair PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title=$(head -n 1 "$PATCH_DIR/pr-title.txt")
+          existing=$(gh pr list --head "$REPAIR_BRANCH" --base "$PR_HEAD_REF" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file "$PATCH_DIR/pr-body.md"
+            echo "Updated repair PR #$existing"
+          elif ! gh pr create --base "$PR_HEAD_REF" --head "$REPAIR_BRANCH" --title "$title" --body-file "$PATCH_DIR/pr-body.md"; then
+            echo "::error title=Could not open repair PR::Enable Settings > Actions > General > Workflow permissions > 'Allow GitHub Actions to create and approve pull requests'. The verified branch $REPAIR_BRANCH was pushed."
+            exit 1
+          fi

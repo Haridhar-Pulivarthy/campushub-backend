@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 
 // Backend only: client/ has its own eslint.config.js and is linted from there.
 export default defineConfig([
-  globalIgnores(["dist", "coverage", "client"]),
+  globalIgnores(["dist", "coverage", "client", ".heal-tools"]),
   {
     files: ["**/*.ts"],
     extends: [js.configs.recommended, tseslint.configs.recommended],

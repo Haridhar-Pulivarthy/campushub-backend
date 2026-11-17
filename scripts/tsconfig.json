@@ -1,0 +1,21 @@
+{
+  // Type-checks scripts/ (run natively by Node 24 type stripping, never
+  // compiled). Same strictness as the backend tsconfig.
+  "include": ["**/*.ts"],
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  }
+}

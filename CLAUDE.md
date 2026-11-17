@@ -7,7 +7,7 @@ These rules are course requirements. Do not weaken or trade them away; if a requ
 ## 1. Stack and dependencies
 
 - TypeScript only: no `.js`/`.jsx` under `src/` or `client/src/`. JS config files only at the repo or `client/` root, and only when the tool requires it.
-- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `@eslint/js`, `typescript-eslint`, `prettier`, `@types/*`, `jest`, `ts-jest`, `supertest`, `mongodb-memory-server`.
+- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `@eslint/js`, `typescript-eslint`, `@anthropic-ai/sdk` (auto-heal script only), `prettier`, `@types/*`, `jest`, `ts-jest`, `supertest`, `mongodb-memory-server`.
 - Client (`client/package.json` only): `react`, `react-dom`, built-in `fetch`. Dev: the Vite React-TS set (`vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`).
 - Any other package needs explicit user approval in this session. Never `npm install` to work around a problem.
 
@@ -59,7 +59,8 @@ These rules are course requirements. Do not weaken or trade them away; if a requ
 
 - Root (backend): `npm run typecheck` (backend + `tsc -p shared`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/server.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm test` (Jest; no `MONGODB_URI` needed), `npx jest --coverage`, `npx tsc -p tsconfig.test.json` (type-checks tests), `npm run format`.
 - Root `npm run lint` lints the backend only (`eslint.config.js`; ignores `client/`, which has its own config). `ts-node` is authorized but not installed.
-- CI (`.github/workflows/ci.yml`): on pushes and PRs to `main`, runs `npm ci`, `npm run lint`, and `npm test -- --ci` at the root, plus `npm ci` and `npm run lint` in `client/`, on Node 24.
+- CI (`.github/workflows/ci.yml`): on pushes and PRs to `main`, runs `npm ci`, `npm run lint`, `npm run test:scripts`, and `npm test -- --ci` at the root, plus `npm ci` and `npm run lint` in `client/`, on Node 24 / `ubuntu-26.04`. Jest failures on same-repo PRs trigger the auto-heal jobs (`docs/lab8-auto-heal.md`).
+- `scripts/auto-heal/` (Lab 8): TypeScript run directly by Node 24 type stripping (erasable syntax only, relative imports end in `.ts`), type-checked by `tsc -p scripts` (part of `npm run typecheck`), tested by `npm run test:scripts` (`node:test`). `policy.ts` decides which files a repair may touch; don't loosen it.
 - `client/`: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run dev` (http://localhost:5173; needs the backend on 3000).
 
 ## Git

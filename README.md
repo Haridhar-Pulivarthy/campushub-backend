@@ -126,4 +126,7 @@ refactoring, and verification are recorded in
 `npm run lint` at the repository root lints the backend (`eslint.config.js`);
 `client/` is linted separately from `client/`. GitHub Actions
 (`.github/workflows/ci.yml`) runs both lints and the Jest suite on pushes and
-pull requests to `main`.
+pull requests to `main`. When Jest fails on a same-repository PR, an auto-heal
+job attempts one verified AI repair and opens a PR into that PR's branch; setup
+(the `ANTHROPIC_API_KEY` secret and a repository setting) is in
+[`docs/lab8-auto-heal.md`](docs/lab8-auto-heal.md).
