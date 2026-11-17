@@ -129,7 +129,7 @@ export async function createReservation(
     resourceId: resourceObjectId,
     status: { $in: BLOCKING_STATUSES },
     startTime: { $lt: end },
-    endTime: { $gt: end },
+    endTime: { $gt: start },
   }).exec();
   if (conflict !== null) {
     throw new ConflictError(
