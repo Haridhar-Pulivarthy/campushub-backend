@@ -136,8 +136,10 @@ jobs:
           sparse-checkout: scripts/auto-heal
           persist-credentials: false
 
-      - name: Hide repair tools from git status
-        run: echo ".heal-tools/" >> .git/info/exclude
+      # Also hides the mongod binary that mongodb-memory-server downloads into
+      # MONGOMS_DOWNLOAD_DIR, so the scope check only sees repository files.
+      - name: Hide repair tools and caches from git status
+        run: printf '%s\n' ".heal-tools/" ".cache/" >> .git/info/exclude
 
       - uses: actions/setup-node@v5
         with:
