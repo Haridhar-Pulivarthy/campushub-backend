@@ -95,6 +95,7 @@ Automated checks:
 ```powershell
 # Backend (repository root); typecheck also checks shared/api.d.ts
 npm run typecheck
+npm run lint
 npm run build
 
 # Frontend
@@ -122,5 +123,7 @@ recorded in `docs/lab5-verification.md`. Lab 6 context optimization,
 refactoring, and verification are recorded in
 [`docs/lab6-refactoring.md`](docs/lab6-refactoring.md).
 
-Backend lint is not configured yet (there is no root `eslint.config.*`), so
-`npm run lint` works only in `client/`.
+`npm run lint` at the repository root lints the backend (`eslint.config.js`);
+`client/` is linted separately from `client/`. GitHub Actions
+(`.github/workflows/ci.yml`) runs both lints and the Jest suite on pushes and
+pull requests to `main`.
