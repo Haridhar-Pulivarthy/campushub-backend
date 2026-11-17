@@ -112,10 +112,13 @@ jobs:
       has_patch: ${{ steps.package.outputs.has_patch }}
     env:
       MONGOMS_DOWNLOAD_DIR: ${{ github.workspace }}/.cache/mongodb-binaries
-      HEAL_DIR: ${{ runner.temp }}/auto-heal
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
+      # The runner context is not available in job-level env.
+      - name: Set work directory
+        run: echo "HEAL_DIR=$RUNNER_TEMP/auto-heal" >> "$GITHUB_ENV"
+
       - name: Check out the failing PR head commit
         uses: actions/checkout@v5
         with:
@@ -277,8 +280,10 @@ jobs:
       PR_HEAD_REF: ${{ github.head_ref }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       REPAIR_BRANCH: fix/auto-heal-${{ github.run_id }}
-      PATCH_DIR: ${{ runner.temp }}/auto-heal-patch
     steps:
+      - name: Set work directory
+        run: echo "PATCH_DIR=$RUNNER_TEMP/auto-heal-patch" >> "$GITHUB_ENV"
+
       # The repair was tested against HEAD_SHA only; never publish it onto a
       # branch that has moved since.
       - name: Abort if the PR head moved or the PR closed
