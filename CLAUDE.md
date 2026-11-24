@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-CampusHub (CS 5500): Express 5 + Mongoose 9 backend in `src/`, React 19 + Vite client in `client/`, shared API types in `shared/`. API contract: `docs/openapi.yaml`. Setup, run, and manual checks: `README.md`. Backend tests: Jest + Supertest on an in-memory MongoDB (`docs/lab7-testing.md`). Current lab: Lab 7 (backend testing and coverage).
+CampusHub (CS 5500): Express 5 + Mongoose 9 backend in `src/`, React 19 + Vite client in `client/`, shared API types in `shared/`. API contract: `docs/openapi.yaml`. Setup, run, and manual checks: `README.md`. Backend tests: Jest + Supertest on an in-memory MongoDB (`docs/lab7-testing.md`). End-to-end tests: Playwright in `e2e/` (`playwright.config.ts`). Current lab: Lab 9 (BDD and end-to-end testing with Playwright).
 
 These rules are course requirements. Do not weaken or trade them away; if a request conflicts, say so and propose a compliant alternative.
 
 ## 1. Stack and dependencies
 
 - TypeScript only: no `.js`/`.jsx` under `src/` or `client/src/`. JS config files only at the repo or `client/` root, and only when the tool requires it.
-- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `@eslint/js`, `typescript-eslint`, `@anthropic-ai/sdk` (auto-heal script only), `prettier`, `@types/*`, `jest`, `ts-jest`, `supertest`, `mongodb-memory-server`.
+- Backend (root `package.json`): `express` v5, `mongoose` v9 — APIs differ from older examples online. Dev: `typescript`, `ts-node`, `eslint`, `@eslint/js`, `typescript-eslint`, `@anthropic-ai/sdk` (auto-heal script only), `prettier`, `@types/*`, `jest`, `ts-jest`, `supertest`, `mongodb-memory-server`, `@playwright/test` (E2E only).
 - Client (`client/package.json` only): `react`, `react-dom`, built-in `fetch`. Dev: the Vite React-TS set (`vite`, `@vitejs/plugin-react`, `typescript`, `@types/react`, `@types/react-dom`, `@types/node`, `eslint`, `@eslint/js`, `typescript-eslint`, `eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`).
 - Any other package needs explicit user approval in this session. Never `npm install` to work around a problem.
 
@@ -57,9 +57,10 @@ These rules are course requirements. Do not weaken or trade them away; if a requ
 
 ## Commands
 
-- Root (backend): `npm run typecheck` (backend + `tsc -p shared`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/server.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm test` (Jest; no `MONGODB_URI` needed), `npx jest --coverage`, `npx tsc -p tsconfig.test.json` (type-checks tests), `npm run format`.
+- Root (backend): `npm run typecheck` (backend + `tsc -p shared`, `scripts`, `e2e`), `npm run build` (`tsc`, `src/` → `dist/`), `npm start` (runs `dist/server.js`; needs `MONGODB_URI`), `npm run dev` (`tsc --watch`), `npm test` (Jest; no `MONGODB_URI` needed), `npx jest --coverage`, `npx tsc -p tsconfig.test.json` (type-checks tests), `npm run format`.
 - Root `npm run lint` lints the backend only (`eslint.config.js`; ignores `client/`, which has its own config). `ts-node` is authorized but not installed.
 - CI (`.github/workflows/ci.yml`): on pushes and PRs to `main`, runs `npm ci`, `npm run lint`, `npm run test:scripts`, and `npm test -- --ci` at the root, plus `npm ci` and `npm run lint` in `client/`, on Node 24 / `ubuntu-26.04`. Jest failures on same-repo PRs trigger the auto-heal jobs (`docs/lab8-auto-heal.md`).
+- E2E (Lab 9): `npm run test:e2e` (`npx playwright test`) runs `e2e/**/*.spec.ts` on Chromium, Firefox, and WebKit with one worker. Playwright starts both servers on 3000/5173 (`reuseExistingServer: false`, so stop dev servers first); the backend runs via `e2e/support/start-api.ts` against an in-memory `campushub_e2e` MongoDB on `127.0.0.1:27027`, always overriding `MONGODB_URI`. Reservation specs use the `db` fixture (`e2e/support/fixtures.ts`): it verifies the server is the E2E instance, empties it before each test, and seeds/checks data with the app's models; bookings themselves go through the UI. Shared settings live in `e2e/support/e2e-env.ts` (browser locale `en-US`, time zone `America/Los_Angeles`). Not run in CI. Browsers: `npx playwright install chromium firefox webkit`. Known limitations (README): an intermittent WebKit-on-Windows click timeout in the conflict test (report it with its trace; don't mask it with retries, longer timeouts, or skips), and only one E2E run at a time.
 - `scripts/auto-heal/` (Lab 8): TypeScript run directly by Node 24 type stripping (erasable syntax only, relative imports end in `.ts`), type-checked by `tsc -p scripts` (part of `npm run typecheck`), tested by `npm run test:scripts` (`node:test`). `policy.ts` decides which files a repair may touch; don't loosen it.
 - `client/`: `npm run typecheck`, `npm run lint`, `npm run build`, `npm run dev` (http://localhost:5173; needs the backend on 3000).
 

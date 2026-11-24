@@ -1,0 +1,22 @@
+{
+  // Type-checks the Playwright suite and config (never compiled: Playwright
+  // transpiles the specs, Node 24 type stripping runs support/start-api.ts).
+  // Same strictness as the backend tsconfig.
+  "include": ["**/*.ts", "../playwright.config.ts"],
+  "compilerOptions": {
+    "module": "nodenext",
+    "target": "esnext",
+    "types": ["node"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true
+  }
+}
