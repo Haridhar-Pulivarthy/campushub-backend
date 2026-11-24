@@ -7,17 +7,19 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit && tsc -p shared && tsc -p scripts",
+    "typecheck": "tsc --noEmit && tsc -p shared && tsc -p scripts && tsc -p e2e",
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "jest",
-    "test:scripts": "node --test \"scripts/**/*.test.ts\""
+    "test:scripts": "node --test \"scripts/**/*.test.ts\"",
+    "test:e2e": "playwright test"
   },
   "keywords": [],
   "type": "module",
   "devDependencies": {
     "@anthropic-ai/sdk": "^1.9.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.1",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.2",

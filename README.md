@@ -105,6 +105,60 @@ npm run lint
 npm run build
 ```
 
+### End-to-end tests (Playwright)
+
+```powershell
+# One-time: download the browsers (about 500 MB)
+npx playwright install chromium firefox webkit
+
+# Stop any dev servers on 3000/5173 first, then:
+npm run test:e2e                           # all browsers; same as: npx playwright test
+npx playwright test --project=firefox      # one browser (chromium | firefox | webkit)
+npx playwright show-report                 # open the last HTML report
+npx playwright test --ui                   # interactive UI mode
+```
+
+- **Servers:** Playwright builds and starts the backend on 3000 and the Vite
+  dev server on 5173, runs `e2e/**/*.spec.ts` with one worker, then stops
+  both. If either port is busy the run fails rather than reuse that server.
+- **Database:** the backend runs through `e2e/support/start-api.ts` against an
+  in-memory MongoDB, `campushub_e2e`, on `127.0.0.1:27027` (must be free; the
+  launcher refuses to start otherwise). Any `MONGODB_URI` in the shell is
+  ignored, so the development database and Docker are never used.
+- **Fixtures:** `e2e/reservation.spec.ts` implements
+  `e2e/scenarios/reservation.feature` (each Gherkin step is a `test.step`).
+  Its `db` fixture (`e2e/support/fixtures.ts`) connects only after confirming
+  that the server is the E2E instance (host, port, database name, and data
+  directory), empties the reservations and resources before every test
+  (each browser, repeat, and retry), and seeds that scenario's data. Bookings
+  themselves always go through the browser.
+- **Locale and time zone:** browsers run in `en-US` / `America/Los_Angeles`,
+  and booking times are always "tomorrow" in that zone, so results do not
+  depend on the host's time zone or the date.
+- **Output:** `test-results/` (traces kept for failed tests) and
+  `playwright-report/`, both git-ignored.
+
+Known limitations:
+
+- **WebKit on Windows:** during repeated runs the WebKit conflict test timed
+  out twice in 28 executions (2026-11). Both times `locator.click` on "Book
+  resource" stalled at "scrolling into view if needed" after the button was
+  visible, enabled, and stable, and no `POST /api/v1/reservations` reached
+  the app. This points at the WebKit driver rather than CampusHub, but the
+  root cause has not been established. The test is left unchanged (no
+  retries, longer timeouts, or skips); rerun and inspect the trace if it
+  recurs.
+- **Slow mongod start:** once (2026-11-24) the run aborted before any test
+  with `GenericMMSError: Instance failed to start within 10000ms`; mongod
+  normally starts in about a second, and the next run passed. If it recurs,
+  rerun and check what else is loading the machine.
+- **One run at a time:** mongod uses the fixed directory
+  `%TEMP%\campushub-e2e-mongo`, wiped at the start of each run. Windows
+  force-stops the launcher, so one run's files (about 160 MB) remain until
+  the next run. Do not start two E2E runs at once: on Windows the second
+  fails on the busy ports; on macOS/Linux it could wipe the first run's data
+  directory before failing.
+
 Proxy smoke test, with both servers running (read-only):
 
 ```powershell

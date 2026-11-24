@@ -4,7 +4,17 @@ import tseslint from "typescript-eslint";
 
 // Backend only: client/ has its own eslint.config.js and is linted from there.
 export default defineConfig([
-  globalIgnores(["dist", "coverage", "client", ".heal-tools"]),
+  globalIgnores([
+    "dist",
+    "coverage",
+    "client",
+    ".heal-tools",
+    // Playwright output
+    "test-results",
+    "playwright-report",
+    "blob-report",
+    "playwright/.cache",
+  ]),
   {
     files: ["**/*.ts"],
     extends: [js.configs.recommended, tseslint.configs.recommended],
